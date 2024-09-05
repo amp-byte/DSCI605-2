@@ -1,0 +1,101 @@
+---
+title: "the basic rmd 2"
+author: "Adrianna Pops"
+date: "2024-09-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Description
+
+* Variable 1: rank - a 3 level job ranking for an individual that includes Associate Professor, Assistant Professor, or Professor, character
+* Variable 2: discipline - whether the individual is in discipline A or discipline B, character
+* Variable 3: yrs.since.phd - years since the individual has completed their phd in years
+* Variable 4: yrs.service - how long the individual has been employed at this university in years
+* Variable 5: sex - whether the individual is male or female, character
+* Variable 6: salary - the salary the individual earns, numeric
+
+These are the variables for the data set salary. They included job rank, discipline, years since phd, years of service, sex and salary earned.
+
+# Data Wrangling
+
+* Step 1: I installed the required packages (knitr, reader, tidyverse) using install.packages(). I already have knitr and readr installed locally so I only installed tidyverse for this lab.
+* Step 2: I loaded tidyverse using library().
+* Step 3: I set my working directory using setwd()
+* Step 4: I read the csv file Salaries using the read_csv() function
+* Step 5: I viewed Salaries to check variables and data types using view()
+* Step 6: I selected columns rank, discipline, sex, and salary using select()
+* Step 7: I filtered out missing salaries using filter()
+* Step 8: I grouped the data by rank, discipline, and, sex using group_by()
+* Step 9: I tallied for each group using count()
+* Step 10: I combined steps 6 - 9 using a pipe operator ( %>% ) and assigned the output to a new variable.
+* Step 11: I used spread() to create three new columns for "Male", "Female", and the count column "n"
+* Step 12: I used gather() to reshape the table back to long and combined the "Male" and "Female" columns back to sex.
+
+These are the steps I used from previous modules in order to take raw data and analyze/visualize it.
+
+```{r, results=FALSE, message=FALSE}
+#install tidyverse package
+#install.packages("tidyverse")
+
+# 1. Load the library
+library(tidyverse)
+
+# 2. Set the working directory
+setwd("/Users/ampops/Desktop/dsci605/module3")
+
+# 3. Read csv file into R using the function read_csv().
+Salaries <- read_csv("/Users/ampops/Desktop/dsci605/module2/Salaries.csv")
+View(Salaries)
+
+# 4. Use select(), filter(), group_by(), count() in this part and combine them with pipe operator
+# + Assign the output to a new object named "Salaries_new." "Salaries_new" should have four columns now. 
+# + Order the steps by
+#   - Select some columns
+#   - Filter the data where "salary" is not missing value.
+#   - Group the data based on the columns of "rank", "discipline", "sex"
+#   - Get the tally count of the observation
+
+# Used a pipe to combine the select(), filter(), group_by(), and count() steps and assigned the output to the variable Salaries_new
+Salaries_new <- Salaries %>% 
+  select(rank, discipline, sex, salary) %>% 
+  filter(salary != 0) %>% 
+  group_by(rank, discipline, sex) %>% 
+  count(rank, discipline, sex)
+
+view(Salaries_new)
+
+# 5. using spread() to transfer the "sex" column to many more columns based on the values in sex.
+# Use spread(): spread(data, key, value, fill = NA, convert = FALSE, drop = TRUE, sep = NULL)
+# + Please use the data frame "Salaries_new" for the spread() operation
+# + Please split the column "sex" in the data frame "Salaries_new" to many more columns based on the values in sex
+# + Have the values of n(tally count) for the new columns.
+# + Fill the missing value with "FALSE" by setting "fill=FALSE"
+# + Assign the output to an object "wide"
+# + Use pipe operator in this case
+
+# Used spread() to create three new columns for "Male", "Female" and "n" which is the tally of the columns.
+wide <- Salaries_new %>%
+  spread(sex, n, fill = FALSE, convert = FALSE, drop = TRUE, sep = NULL)
+
+view(wide)
+
+# 6. Reshape the table from wide to long: using gather() to combine multiple "sex" related columns to one column sex
+# Use gather(): gather(data, key, value, ..., na.rm = FALSE, convert = FALSE, factor_key = FALSE)
+# + Please reshape the data frame "wide" obtained from spread() into the long table 
+# + In the spread() step, you will get two columns about sex "Female" and "Male"
+# + Please make the two sex columns into one column and name the column as "sex"
+# + Please have the values in the two sex columns for a new column "n" (tally count)
+# + Remove the NA by setting "na.rm=TRUE"
+# + Use pipe operator in this case
+
+# Used gather() to recombine the sex column values and reshape the table back to long. 
+long <- wide %>% 
+  gather(sex, n, Female, Male, na.rm = TRUE, convert = FALSE, factor_key = FALSE)
+
+view(long)
+```
+
