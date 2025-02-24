@@ -1,0 +1,143 @@
+---
+title: "PopsAdrianna_DataProcessing"
+author: "Adrianna Pops"
+date: "2024-11-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Load the Required libraries
+```{r processing, show_col_types = FALSE}
+# load in the libraries 
+library(tidyverse)
+library(raster)          #raster()
+library(sf)              #st_read()
+library(ggspatial)       #annotation_scale, annotation_north_arrow
+library(ggnewscale)      #new_scale_color() 
+library(ggmap)           #scalebar()
+library(zoo)             #working time series data
+library(plotly)          #plot_ly()
+library(shiny)           #shiny app
+library(gridExtra)       #grid.arrange()
+```
+
+# 2. Set up working directory and read datasets into R
+```{r}
+#Set the working directory
+setwd("/Users/ampops/Desktop/DSCI605LABS2")
+
+# read in csv datasets and the shapefile
+crime_rate <- read_csv("/Users/ampops/Desktop/DSCI605LABS2/fp_data/crime_and_incarceration_by_state.csv")
+
+murder_rate <- read_csv("/Users/ampops/Desktop/DSCI605LABS2/fp_data/murder_rates_states_by_region_fulldata_data.csv")
+
+uemp_rate <-  read_csv("/Users/ampops/Desktop/DSCI605LABS2/fp_data/unemployment_county.csv")
+
+states <- st_read("/Users/ampops/Desktop/DSCI605LABS2/fp_data/tl_2019_us_state/tl_2019_us_state.shp")
+```
+
+# 3. Process the USA polygon shapefile
+```{r}
+# focusing on the contiguous us
+cont_states <- states %>% filter(STUSPS != "AK" &
+                                   STUSPS != "AS" &
+                                   STUSPS != "MP" &
+                                   STUSPS !=  "PR" &
+                                   STUSPS !=  "VI" &
+                                   STUSPS !=  "HI" &
+                                   STUSPS !=  "GU")
+
+#check the length of the states
+length(unique(cont_states$STUSPS))
+```
+
+# 4. process the unemployment rate
+
+```{r}
+#check the length of state
+unique(uemp_rate$State)
+length(unique(uemp_rate$State))
+colnames(uemp_rate)
+uemp_rate <- uemp_rate %>% filter(State != "AK" & State != "HI") %>% 
+  group_by(State, Year) %>% 
+  summarise(Totalforce = sum(`Labor Force`),
+            Totalemploted = sum(Employed),
+            Totalunemployed = sum(Unemployed),
+            Meanrate = mean(`Unemployment Rate`, rm.na = TRUE)
+            )
+
+#Check the length of the State again
+length(unique(uemp_rate$State))
+
+#change th column name to "State" in to "STUSPS" by using the rename().
+# use filter () to pick years 2007 - 2014
+uemp_rate <- uemp_rate %>% 
+  rename("STUSPS" = "State") %>% 
+  filter(Year %in% c(2007:2014))
+```
+
+# 5. process the crime rate data
+
+```{r}
+#Check the length of states
+unique(crime_rate$jurisdiction)
+length(unique(crime_rate$jurisdiction))
+head(crime_rate)
+
+#Change the column name 
+crime_rate <-  crime_rate %>% 
+  rename("STUSPS" = "jurisdiction") %>% 
+  rename("Year" = "year") %>% 
+  filter(STUSPS!= "FEDERAL" & STUSPS!= "ALASKA" & STUSPS!= "HAWAII") %>%
+  filter(Year %in% c(2007:2014))
+
+#Recheck the data
+length(unique(crime_rate$STUSPS))
+head(crime_rate)
+
+#Changes the state names in the state column "STUSPS"
+crime_rate$STUSPS <- state.abb[match(str_to_title(crime_rate$STUSPS),state.name)]
+
+#Calculate the crime_rate
+crime_rate <- crime_rate %>% 
+  mutate(crime_rate=(violent_crime_total/state_population)*100) %>% 
+  dplyr::mutate_if(is.numeric, round, 1)
+```
+
+# 6. join the relational tables
+
+```{r}
+#save(list = c("crime_rate, "uemp_rate", "cont_state"), file = "cleandata.rdata)
+# load(file = "cleandata.rdata)
+
+cs_erate <- right_join(cont_states, uemp_rate, by = c("STUSPS"))
+
+cs_erate_crate <- right_join(cs_erate, crime_rate,
+                             by = c("STUSPS", "Year"))
+
+cs_erate_crate1 <- cs_erate_crate %>% 
+  select(REGION, STUSPS, NAME, Year, Meanrate, crime_rate) %>% 
+  rename("meanrate" = "Meanrate")
+```
+
+# 7. check the missing values
+
+```{r}
+#check missing values
+which(is.na(cs_erate_crate1$REGION))
+```
+
+# 8. Save the final combined data
+
+```{r}
+# save object cs_erate_crate1 into cs_erate_cratecombined.rds
+saveRDS(cs_erate_crate1, file = "cs_erate_cratecombined.rds")
+```
+
+#9. Does data have the required columns for the year, crime rate, unemployment rate, region, state, and geometry 
+```{r}
+readRDS("/Users/ampops/Desktop/DSCI605LABS2/cs_erate_cratecombined.rds")
+```

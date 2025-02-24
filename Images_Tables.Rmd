@@ -1,0 +1,72 @@
+---
+title: "PopsAdrianna_7.3_RMarkdown_Images and Tables"
+author: "Adrianna Pops"
+date: "2024-10-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r figs1,fig.width=7,fig.height=6,fig.res=200,fig.cap="\\label{fig:figs1}A histogram of Crime Rate by Year"}
+# 1. load required packages
+library(tidyverse)
+# install.packages("readxl")
+library(readxl)
+library(viridis)
+library(hrbrthemes)
+library(colorspace)
+
+# 2. read in and inspect the data
+crime_df <- read_excel("/Users/ampops/Desktop/DSCI605LABS2/Sampledata2.xlsx")
+
+glimpse(crime_df)
+view(crime_df)
+names(crime_df)
+
+# 3. create a table to show the first 10 rows of the original data
+top_10 <- head(crime_df, 10)
+knitr::kable(top_10, caption= "The first 10 rows of the CrimeRate dataframe")
+
+# 4. create a table to show the statistical values using group_by() and summarize()
+CrimeStats<- crime_df %>% 
+  group_by(Year) %>% 
+  summarize(avgCrime = mean(CrimeRate), 
+            maxCrime = max(CrimeRate), 
+            minCrime = min(CrimeRate))
+knitr::kable(CrimeStats, caption= "Mean, Min, and Max values by Year of Crime Rate")
+
+# 5. plot a grouped histogram for the variable crime rate
+n1 <- length(unique(crime_df$Year))
+col1=colorspace::diverge_hcl(n1)
+col1
+
+# the histogram for crime rate
+crime_df %>%
+  ggplot(aes(x = CrimeRate, color = as.factor(Year), fill = as.factor(Year))) + 
+  geom_histogram(position = "dodge", alpha = 0.5, bins = 10) +
+  scale_color_manual(values = col1)+
+  scale_fill_manual(values = col1)+
+  labs(title = "Crime Rate Histogram Plots", x = "Crime rate per 100,000 people", y = "count")+
+  theme_classic()
+```
+
+```{r figs2,fig.width=7,fig.height=6,fig.res=200,fig.cap="\\label{fig:figs2}A basic scatter plot of the of Crime Rate by Year"}
+# plot a scatter plot for the variable "year" and CrimeRate
+crime_df %>%
+  ggplot(aes(x = Year, y = CrimeRate)) + 
+  geom_point(pch = 21) +
+  labs(title = "Crime Rate Histogram Plots", x = "Year", y = "Crime Rate per 100,000 people") +
+  theme_classic()
+```
+
+```{r figs3,fig.width=7,fig.height=6,fig.res=200,fig.cap="\\label{fig:figs3}A basic Line plot showing the average Crime Rate by Year"}
+# plot a line graph for avg CrimeRate per Year
+CrimeStats %>% 
+  ggplot(aes(x = Year, y = avgCrime)) +
+  geom_point() +
+  geom_line(color = "blue")
+```
+

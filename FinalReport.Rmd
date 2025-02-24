@@ -1,0 +1,349 @@
+---
+title: "PopsAdrianna_FinalReport"
+author: "Adrianna Pops"
+date: "2024-12-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Time Series and Spatial Analysis of Crime and Unemployment Rates over the Contiguous USA
+
+```{r processing, message = FALSE}
+library(tidyverse)
+library(kableExtra)
+library(raster)          #raster()
+library(sf)              #st_read()
+library(ggspatial)       #annotation_scale, annotation_north_arrow
+library(ggnewscale)      #new_scale_color() 
+library(ggmap)           #scalebar()
+library(zoo)             #working time series data
+library(plotly)          #plot_ly()
+library(shiny)           #shiny app
+library(gridExtra)       #grid.arrange()
+```
+
+## Data
+
+The datasets used in this project were sourced from various places. The Unemployment Rate by County dataset is originally scraped from the US Department of Labor's Bureau of Labor Statistics and is available on Kaggle. This dataset contains 37,674 observations and 7 variables: *‘County’, ‘State’,  ‘Labor Force’, ‘Employed’, ‘Unemployed’, ‘Unemployment Rate’, and ‘Year.’*
+
+The Crime Rate dataset comes from the FBI database that logs serious crimes in every state. This dataset contains 816 observations and 17 variables: *‘jurisdiction’, ‘includes_jails’, ‘year’, ‘prisoner_count’, ‘crime_reporting_change’, ‘crimes_estimated’, ‘state_population’, ‘violent_crime_total’, ‘murder_manslaughter’, ‘rape_legacy’, ‘rape_revised’, ‘robbery’, ‘agg_assault’, ‘property_crime_total’, ‘burglary’, ‘larceny’, ‘vehicle_theft’*
+
+The States shapefile comes from the US Census Bureau’s Master Address File / Topologically Integrated Geographic Encoding and Referencing (MAF/TIGER) Database (MTDB). This shapefile is an independent dataset that covers the entire US. This shapefile has 56 observations and 15 variables: *‘REGION’, ‘DIVISION’, ‘STATEFP’, ‘STATENS’, ‘GEOID’, ‘STUSPS’, ‘NAME’, ‘LSAD’, ‘FUNCSTAT’, ‘ALAND’, ‘AWATER’, ‘INTPLAT’, ‘INTPTLON’, and ‘geometry’.*
+
+These data sets will be cleaned, formatted, and joined in order to produce the final dataset for the project: cs_erate_crate_combined.
+
+
+```{r}
+#table of data and it's sources goes here
+# create a data frame
+text_tbl_df <- data.frame(
+  Datasets = c("Unemployment Rate", "Crime Rate", "TIGER/Line 2019 Shapefile"),
+  Sources = c("https://www.kaggle.com/jayrav13/unemployment-by-county-us", "https://ucr.fbi.gov/crime-in-the-u.s", "https://catalog.data.gov/dataset/tiger-line-shapefile-2019-nation-u-s-current-state-and-equivalent-national"))
+
+# use data frame in kable for table
+kbl(text_tbl_df, caption = "The final project datasets and their sources") %>% #using the df i made into kbl
+  kable_paper() %>% #theme
+  kable_styling(font_size = 18) %>% #change font size to 18pt
+  column_spec(1, bold = T, border_right = T) %>% # bold text items, add right border on col 1
+  column_spec(2, background = "#ECECEC") # make background light gray 
+```
+
+## Project Objectives
+
+The primary objective of this project is to determine if unemployment rates significantly impact crimes rates. 
+
+Null Hypothesis: Unemployment rates do not significantly influence the crime rates in the US.
+Alternative Hypothesis: Unemployment rates significantly influence crime rates in the US.
+
+1. My first objective is to find the relationship between unemployment and crime rates in the US over a period of time by plotting a time series for specific regions/states over an interval of 2007 - 2014.
+
+2. My second objective is to find the distribution of unemployment and crime over the US and compare unemployment and crime rates at the country-level and state-level by spatial mapping.
+
+3. My third objective is to illustrate a correlation between crime rate and unemployment rate by region using a scatter plot.
+
+## Data Processing and data visualization
+
+For this project, I will be filtering out certain data before joining them into one dataset cs_erate_crate_combined.
+
+The datasets were first cleaned by removing any states that weren’t connected to the mainland US like Alaska and Hawaii. Next, for the unemployment data and crime data I changed the name of the state column to STUSPS to better match the shapefile. I grouped the data by mean unemployment rate stored these values in meanrate. I filtered the data so that only included years between 2007 and 2014. I also renamed the year column to Year with a capital Y, in the crime dataset. Finally, I changed all the state names to their capital two letter abbreviations (i.e. Alabama = AL) which is now the STUSPS variable. 
+Once I finished cleaning the data I merged them into one dataset using two right_join()functions. I used all the columns I reformatted in the right_join() function to merge the three data sets.
+
+```{r}
+#table of data wrangling goes here
+# create a data frame
+dw_tbl_df <- data.frame(
+  Datasets = c("State Polygons", "Unemployment Data", "Crime Data"),
+  Formatting = c("Remove states that are apart from main US", 
+  
+  "Remove states that are apart from main US \n 
+   Rename the state column \n 
+   Group data using group_by for average unemployment rate \n 
+   Use data from 2007 - 2014",
+  
+  "Remove states that are apart from the main US\n
+   Rename the state column\n
+   Rename the year column\n
+   Use data from 2007 - 2014\n
+   Change all the state names to the capital two letter abbreviation"
+  ))
+
+# use data frame in kable for table
+kbl(dw_tbl_df, caption = "Data processing tasks for final project datasets") %>% #using the df i made into kbl
+  kable_paper() %>% #theme
+  kable_styling(font_size = 16) %>% #change font size to 16pt
+  column_spec(1, bold = T, border_right = T) %>% # bold text items, add right border on col 1
+  column_spec(2, background = "#ECECEC") # make background light gray 
+```
+
+### Data preprocessing: 
+
+```{r message = FALSE}
+#Set the working directory
+setwd("/Users/ampops/Desktop/DSCI605LABS2")
+
+# read in csv datasets and the shapefile
+crime_rate <- read_csv("/Users/ampops/Desktop/DSCI605LABS2/fp_data/crime_and_incarceration_by_state.csv")
+
+murder_rate <- read_csv("/Users/ampops/Desktop/DSCI605LABS2/fp_data/murder_rates_states_by_region_fulldata_data.csv")
+
+uemp_rate <-  read_csv("/Users/ampops/Desktop/DSCI605LABS2/fp_data/unemployment_county.csv")
+
+states <- st_read("/Users/ampops/Desktop/DSCI605LABS2/fp_data/tl_2019_us_state/tl_2019_us_state.shp")
+```
+
+### Process the USA polygon shapefile
+```{r message = FALSE}
+# focusing on the contiguous us
+cont_states <- states %>% filter(STUSPS != "AK" &
+                                   STUSPS != "AS" &
+                                   STUSPS != "MP" &
+                                   STUSPS !=  "PR" &
+                                   STUSPS !=  "VI" &
+                                   STUSPS !=  "HI" &
+                                   STUSPS !=  "GU")
+
+#check the length of the states
+length(unique(cont_states$STUSPS))
+```
+
+### Process the unemployment rate
+
+```{r message = FALSE}
+#check the length of state
+unique(uemp_rate$State)
+length(unique(uemp_rate$State))
+colnames(uemp_rate)
+uemp_rate <- uemp_rate %>% filter(State != "AK" & State != "HI") %>% 
+  group_by(State, Year) %>% 
+  summarise(Totalforce = sum(`Labor Force`),
+            Totalemploted = sum(Employed),
+            Totalunemployed = sum(Unemployed),
+            Meanrate = mean(`Unemployment Rate`, rm.na = TRUE)
+            )
+
+#Check the length of the State again
+length(unique(uemp_rate$State))
+
+#change th column name to "State" in to "STUSPS" by using the rename().
+# use filter () to pick years 2007 - 2014
+uemp_rate <- uemp_rate %>% 
+  rename("STUSPS" = "State") %>% 
+  filter(Year %in% c(2007:2014))
+```
+
+### Process the crime rate data
+
+```{r message = FALSE}
+#Check the length of states
+#unique(crime_rate$jurisdiction)
+length(unique(crime_rate$jurisdiction))
+#head(crime_rate)
+
+#Change the column name 
+crime_rate <-  crime_rate %>% 
+  rename("STUSPS" = "jurisdiction") %>% 
+  rename("Year" = "year") %>% 
+  filter(STUSPS!= "FEDERAL" & STUSPS!= "ALASKA" & STUSPS!= "HAWAII") %>%
+  filter(Year %in% c(2007:2014))
+
+#Recheck the data
+length(unique(crime_rate$STUSPS))
+#head(crime_rate)
+
+#Changes the state names in the state column "STUSPS"
+crime_rate$STUSPS <- state.abb[match(str_to_title(crime_rate$STUSPS),state.name)]
+
+#Calculate the crime_rate
+crime_rate <- crime_rate %>% 
+  mutate(crime_rate=(violent_crime_total/state_population)*100) %>% 
+  dplyr::mutate_if(is.numeric, round, 1)
+```
+
+### Join the relational tables
+
+```{r message = FALSE}
+#save(list = c("crime_rate, "uemp_rate", "cont_state"), file = "cleandata.rdata)
+# load(file = "cleandata.rdata)
+
+cs_erate <- right_join(cont_states, uemp_rate, by = c("STUSPS"))
+
+cs_erate_crate <- right_join(cs_erate, crime_rate,
+                             by = c("STUSPS", "Year"))
+
+cs_erate_crate1 <- cs_erate_crate %>% 
+  select(REGION, STUSPS, NAME, Year, Meanrate, crime_rate) %>% 
+  rename("meanrate" = "Meanrate")
+```
+
+### Check for missing values
+
+```{r message = FALSE}
+#check missing values
+which(is.na(cs_erate_crate1$REGION))
+```
+
+### Save the final combined data into RDS
+
+```{r message = FALSE}
+# save object cs_erate_crate1 into cs_erate_cratecombined.rds
+#saveRDS(cs_erate_crate1, file = "cs_erate_cratecombined.rds")
+```
+
+### Does data have the required columns for the year, crime rate, unemployment rate, region, state, and geometry?
+```{r}
+#readRDS("/Users/ampops/Desktop/DSCI605LABS2/fp_data/cs_erate_cratecombined.rds")
+```
+
+# EDA analysis
+
+```{r message = FALSE}
+# read in RDS
+cs_erate_combined <- readRDS("/Users/ampops/Desktop/DSCI605LABS2/fp_data/cs_erate_cratecombined.rds")
+
+cs1 <- head(cs_erate_combined, n = 10)
+summary(cs_erate_combined)
+
+knitr::kable(cs1, caption = 'Table 1: The first 10 rows of cs_erate_combined')
+```
+
+### The 2014 Spatial Maps for Unemployment and Crime Rate
+```{r}
+#colors for US spatial mapping
+cv1 = colorspace::diverge_hcl(56) # should load as blue darker blue means higher rate
+```
+
+```{r message = FALSE}
+# spatial map of contiguous us for unemployment in 2014
+cs_erate_combined %>% 
+  filter(Year %in% c(2014)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = meanrate), color = 'lightblue') + #light blue borders instead of dark grey
+  guides(fill = guide_legend(title = 'Year2014 Unemployment')) + #scale and legend for map
+  # scale bar in bottom left
+  annotation_scale(location = 'bl', width_hint = 0.1) +
+  # north arrow in bottom right
+  annotation_north_arrow(location = 'br', which_north = 'true', 
+                         style = north_arrow_fancy_orienteering, width = unit(1, 'in')) +
+  labs(caption = "Spatial map of 2014 unemployment rates in mainland US\n Source: Module 12-13") +
+  xlab("Longitude") + 
+  ylab("Latitude") +
+  ggtitle("Unemployment across the Contiguous US (2014)")
+
+# spatial map of contiguous us for crime rate in 2014
+cs_erate_combined %>% 
+  filter(Year %in% c(2014)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = crime_rate), color = 'lightblue') + #easier to see states with this color
+  guides(fill = guide_legend(title = 'Year2014 Crime Rates')) + #crime rate scale
+  # scale bar in bottom left
+  annotation_scale(location = 'bl', width_hint = 0.1) + 
+  # north arrow in bottom right
+  annotation_north_arrow(location = 'br', which_north = 'true', 
+                         style = north_arrow_fancy_orienteering, width = unit(1, 'in')) +
+  labs(caption = "Spatial map of 2014 crime rates in mainland US\n Source: Module 12-13") +
+  xlab("Longitude") + 
+  ylab("Latitude") +
+  ggtitle("Crime Rates across the Contiguous US (2014)")
+```
+
+### Scatter Plots Crime Rate and Unemployment 2014
+```{r message = FALSE}
+# scatter plot by region of crime rate and unemployment rates
+cs_erate_combined %>% 
+  filter(Year %in% c(2014)) %>% #only for 2014
+  ggplot(aes(x = crime_rate, y = meanrate)) + #crime rate vs. unemployment rates
+  geom_point(aes(color = REGION)) + #by region of US
+  labs(caption = "Scatter plot of relationship between unemployment and crime rates\n Source: Module 2, 6, 13") +
+  xlab('Crime Rate per 100') +
+  ylab('Unemployment Rate') +
+  ggtitle('Crime and Unemployment Rates in Contiguous US (2014)')
+```
+
+### Time Series Data Visualization 2007 - 2014
+```{r message = FALSE}
+# how to fix error: not implemented for objects of class sfc_GEOMETRY
+# take out geometry data from rds so plotly runs smoother
+cs_erate_combined_no_geometry <- st_drop_geometry(cs_erate_combined)
+
+# create a time series plotting unemployment for 4 states using plot_ly
+cs_erate_combined_no_geometry %>%
+  filter(NAME %in% c('California', 'Texas', 'Indiana', 'New York')) %>% # 4 states
+  group_by(NAME, Year) %>% # group by state name and year
+  summarize(mean_unemployment = mean(meanrate, na.rm = TRUE)) %>%
+  plot_ly(x = ~Year, y = ~mean_unemployment, color = ~NAME, type = 'scatter', mode = 'lines', name = ~NAME) %>% #plot time series of unemployment over the years
+  layout(
+    title = 'Unemployment Rates in CA, IN, TX, NY (2007 - 2014)',
+    xaxis = list(title = 'Year'),
+    yaxis = list(title = 'Unemployment Rate'),
+    legend = list(title = list(text = 'States'))
+  )
+
+# create a time series plotting crime rate for 4 states using plot_ly
+cs_erate_combined_no_geometry %>%
+  filter(NAME %in% c('California', 'Texas', 'Indiana', 'New York')) %>% #same states
+  group_by(NAME, Year) %>% # group data by state over the years
+  summarize(mean_crate = mean(crime_rate)) %>% #find mean crime rate for time series
+  plot_ly(x = ~Year, y = ~mean_crate, color = ~NAME, type = 'scatter', mode = 'lines', name = ~NAME) %>% #plot time series for 4 states based on crime rate
+  layout(
+    title = 'Crime Rates in CA, TX, IN, NY (2007 - 2014)',
+    xaxis = list(title = 'Year'),
+    yaxis = list(title = 'Crime Rate'),
+    legend = list(title = list(text = 'States'))
+  )
+```
+
+### Discussion and Conclusion
+
+Through exploratory data analysis, I observed how unemployment rates affects some states. I used spatial mapping, time series, and a scatter plot to find these trends. The first map shows unemployment rates across the United States. The light the color the higher the rate. This map shows us that the middle of the US specifically States like North and South Dakota, Texas, Montana, Nebraska, Oklahoma, Wyoming and Kansas have lower rates of unemployment than other States. I chose the color blue to represent unemployment rates because it represents a serious topic.
+
+The Crime Rate spatial map illustrates crime rates across the US in 2014. I used the same blue since the scale would be the same. Readers don't have to adjust what they know to read this graph. Like above, this map scales from darkest blue to lightest blue where lightest blue represents higher rates of crime. The highest rates of crime 0.6 can be seen in Nevada, New Mexico, and Tennesee. The above map also showed these states to have higher rates of unemployment at 8%. Vermont, Maine, and Kentucky had the some of the lowest rate of crime. Compared to the unemployment map Vermont's rate of unemployment was a 4% while Maine's rate is 6%.
+
+The Scatter plot was made to find a potential relationship between unemployment rates and crime rates. The rates were measured by region of the US. It shows that 6 states in Region 3 show higher levels of crime along with heightened unemployment rates. Region 1 of the US maintains a crime rate of 0.4 or less with varying rates of unemployement. States in Region 3 maintain a crime rate between 0.3 and 0.4 however the states that fall into 0.4 have a crime rate of at least 6%. Region 4 has states with varying levels of crime 0.2 - 0.6 and unemployment 4 - 8.5%. 3 of the 4 regions reveal a small pattern between unemployment and crime rates.
+
+I chose 4 states to time series in relation to unemployment rates: California, Indiana, New York, and Texas. I plotted the average unemployment rate and grouped by year to create this time series. It shows that California has a higher average rate of unemployment than any of the other 3 states from 2007 - 2014. Like California the other three states saw a spike in the rate and after about 2010 many states saw the unemployment rate decline. Even though the rates when down significantly, they didn't return to their lowest starting rates.
+
+The next time series uses the same four states but crime rate is being analyzed to see if there is a trend between lowering unemployment rates and lowering crime rates. Texas and California started off at 0.5 for a crime rate but in 2010 when they first saw unemployment rates come down, crime also went down to 0.4 for both states. Indiana also saw a steep jump in 2009 and an almost immediate decline for unemployment rates but crime stayed level at 0.3 until 2012 until it spiked to 0.4. New York saw a jump in unemployment rates in 2009, they maintained similar levels until a drop in 2012. Even though New York unemployment rates were steady and declining, their crime rate maintained a 0.4 from 2007 to 2014.
+
+Though it seems natural that unemployment would lead to higher crime, the results of the EDA show that there are likely other factors that contribute to higher crime rates other than unemployment rates. Research suggests that GDP per capita, high school graduation rates, number of police officers per 100,000 inhabitants, and poverty rate can also be aggravating factors when it comes to crime rates (Ajimotokin 2015).
+
+I found that there were some states that demonstrated lower levels of crime and also had low levels of unemployment (like Texas) in the time series plots. But, when grouped by Region, they showed something slightly different. 
+
+Region 4 (The West) was saw crime rates of 0.4 - 0.6 and unemployment rates of 4 - 8.5%. However, not every state in that region supported the claim that higher rates of unemployment lead to higher rates of crime. 
+
+The spatial maps also didn't corroborate this claim. States like North Dakota and Nebraska had the lowest rates of unemployment but their crime was 0.3. 0.3 is lower than 0.6 however, if my claim was true their crime rates would be lower since they have the smallest rates of unemployment. Though some states had data to help our claim most states didn’t which leads me to believe that unemployment doesn’t affect crime rates as heavily as I believed.
+
+While the visuals helped illustrate my hypothesis in certain states it wasn't true for all states. The spatial mapping was helpful in showing the distribtuion of crime and unemployment rates but didn't overtly answer the question at hand. The time series were more helpful in this regard as rates were measured over an interval of time and by state, however, the data as a whole doesn't support that unemployment contributes to higher crime rates. 
+
+# References (APA)
+FBI. (2010, July 15). Crime in the U.S. FBI. https://ucr.fbi.gov/crime-in-the-u.s 
+
+Ravaliya, J. (2017, May 22). US unemployment rate by county, 1990-2016. Kaggle. https://www.kaggle.com/jayrav13/unemployment-by-county-us 
+
+U.S. Census Bureau, Department of Commerce - Tiger/Line Shapefile, 2019, nation, U.S., current state and equivalent national. (2022, November 1). https://catalog.data.gov/dataset/tiger-line-shapefile-2019-nation-u-s-current-state-and-equivalent-national 
+
+Ajimotokin, S., Haskins, A., & Wade, Z. (2015). The Effects of Unemployment on Crime Rates in the U.S. (dissertation). Institute of Research and Scholarship, Atlanta. 
+
+Britto, D. G. C., Pinotti, P., & Sampaio, B. (2022). THE EFFECT OF JOB LOSS AND UNEMPLOYMENT INSURANCE ON CRIME IN BRAZIL (dissertation). (G. W. Imbens, Ed.). John Wiley & Sons Ltd. 

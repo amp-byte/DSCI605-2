@@ -1,0 +1,62 @@
+---
+title: "PopsAdrianna_10.1_Integrate time series data"
+author: "Adrianna Pops"
+date: "2024-10-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load the library
+
+```{r libraries}
+# Load the libraries
+library(tidyverse)
+library(zoo)
+library(knitr)
+```
+
+# Read the data provided
+```{r readdata}
+#Set the working directory
+setwd("/Users/ampops/Desktop/DSCI605LABS2")
+
+crime3yr <- readRDS("/Users/ampops/Desktop/DSCI605LABS2/Crime3years.rds")
+```
+
+## Select two-year data
+
+```{r select data}
+crime2yr <- head(crime3yr, 365*24*2)
+```
+
+
+# Integrate the two-year hourly data into monthly data
+
+```{r integration}
+crime2yr_new<-crime2yr %>% 
+  mutate(month = month(crime2yr$Date), year=year(crime2yr$Date)) %>% 
+  mutate(monthnum = strftime(Date, format = '%m')) 
+
+crime2yr_month <- crime2yr_new %>%
+  filter(year %in% c(2017:2019)) %>% 
+  group_by(year, month) %>%
+  summarize(case_monthly=sum(Battery))
+
+```
+
+# kable() for a table
+
+```{r kable}
+twoyears_data <- crime2yr_month
+knitr::kable(twoyears_data, caption= "Battery Crime at a Monthly Scale from 2017-09-01 to 2019-09-01")
+
+```
+
+# Save the data in the required format
+
+```{r save data}
+saveRDS(twoyears_data, "Crime2years_monthly.rds")
+```

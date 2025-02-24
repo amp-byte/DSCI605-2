@@ -1,0 +1,133 @@
+---
+title: "PopsAdrianna_11.2_Time series data visualization"
+author: "Adrianna Pops"
+date: "2024-11-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Time Series Data Visualization
+
+## 1 Install/Load the library
+```{r libraries}
+# Load the libraries
+library(tidyverse)
+library(zoo)
+library(hms)
+```
+
+## 2 Load and Read the original data provided
+```{r readdata}
+#Set the working directory
+setwd("/Users/ampops/Desktop/DSCI605LABS2")
+
+# read in RDS dataset
+crime3yr <- readRDS("/Users/ampops/Desktop/DSCI605LABS2/Crime3years.rds")
+```
+
+## 2a Select two years of the original data 2018-01-01 00:00 - 2019-12-31 00:00
+```{r select data}
+#selecting two years
+crime2yr <- head(crime3yr, 365*24*2) #selecting two years from the original data
+```
+
+
+## 3 Integrate the selected two-year data into weekly and monthly data
+```{r integration}
+# Create new variables for weekly integration
+crime2yr_new_w <- crime2yr %>% 
+  #adds hour, week, month, and year columns extracted from Date column
+  mutate(hour = hour(crime2yr$Date),week= weekdays(crime2yr$Date),
+         month = month(crime2yr$Date),year=year(crime2yr$Date)) %>% 
+  # adds a new weeknum column with a week number from 1 - 52
+  mutate(weeknum = strftime(Date, format = '%V'))
+
+# grouping the data by week
+crime2yr_weekly <- crime2yr_new_w %>% 
+  #use only 2018 and 2019
+  filter(year %in% c(2018:2019)) %>% 
+  #group by year and week number for scale_x later
+  group_by(year, weeknum) %>%
+  #adds dates column as a date type formatted as YMD
+  mutate(dates = as.Date(strftime(Date, format = '%F'))) %>%
+  #finds earliest date and counts total crimes for that date
+  summarize(yearweek = min(dates), num_crimes_w = sum(Battery)) 
+  
+
+# create new variables for monthly integration
+crime2yr_new_m <- crime2yr %>% 
+  # add month and year column to new dataset
+  mutate(month = month(crime2yr$Date), year=year(crime2yr$Date)) %>% 
+  # create yearmonth date object to represents dates in YM format for plotting
+  mutate(yearmonth = strftime(Date, format = '%Y-%m'))
+
+# grouping data by month by creating a new sub dataset 
+crime2yr_month <- crime2yr_new_m %>%
+  # use only 2018 and 2019
+  filter(year %in% c(2018:2019)) %>% 
+  #group by year and month for plotting
+  group_by(year, month) %>%
+  # create yearmonth col in new dataset as date object in YM formatting for plotting 
+  mutate(yearmonth= as.Date(as.yearmon(paste0(year, month), "%Y%m"))) %>% 
+  # summarizing yearmonth col, and num of abttery crimes for each month
+  summarize(yearmonth, num_crimes_m = sum(Battery))
+
+# new dataset for stacked line plot ts, same thing as above
+crime2yr_m12new <- crime2yr %>% 
+  # create a month and year column in this new sub dataset
+  mutate(month = month(crime2yr$Date), year=year(crime2yr$Date)) %>% 
+  filter(year %in% c(2018:2019)) %>%
+  # create day and year column this will produce the same day and year
+  mutate(day=1, Year=2018)%>%
+  # combine d, m, y into newdate
+  mutate(newdate = as.Date(paste(day,month,Year, sep="."),"%d.%m.%Y")) %>%
+  #grouping by newdate and year
+  group_by(newdate, year) %>% 
+  #summarize total cases
+  summarize(cases = sum(Battery))
+```
+
+## 4 - 7 Plot the time series using scale_x_ date functions
+
+```{r timeseries}
+#hourly time series plot using ggplot
+crime_hour_ts <- ggplot(crime2yr, aes(x = Date, y = Battery)) +
+  geom_point() + # points on graph
+  geom_line(color = "red") + #red lines on graph
+  xlab("Hourly") + # x axis label
+  ylab("Number of Crimes") + # y axis label
+  scale_x_datetime(date_labels = "%Y-%m-%d %H:%M:%S") # x-axis datetime format
+crime_hour_ts
+
+#weekly time series plot using ggplot
+crime_week_ts <- ggplot(crime2yr_weekly, aes(x = yearweek, y = num_crimes_w)) +
+  geom_point() + # points on graph
+  geom_line(color = "red") +
+  xlab("Weekly") + # x axis label
+  ylab("Number of Crimes") + # y axis label
+  scale_x_date(date_labels = "%Y/%V") # x-axis datetime format
+crime_week_ts
+
+#monthly time series plot using ggplot
+crime_month_ts <- ggplot(crime2yr_month, aes(x = yearmonth, y = num_crimes_m)) +
+  geom_point() + # points on graph
+  geom_line(color = "red") +
+  xlab("Monthly") + # x axis label
+  ylab("Number of Crimes") + # y axis label
+  scale_x_date(date_labels = "%Y-%b")# x-axis datetime format
+crime_month_ts
+
+# using ggplot to create a stacked plot
+st_crime2yrs <- ggplot(crime2yr_m12new, aes(x = newdate, y = cases, color = factor(year))) + #color = will produce stacked effect
+  geom_point() + # points on graph
+  geom_line() + # lines will automatically be different colors 
+  xlab("Month") + # x axis label
+  ylab("Number of Crimes") + # y axis label
+  scale_x_date(date_labels = "%b")+ # x-axis datetime format
+  theme(axis.text.x=element_text(angle=30, hjust=1)) + #angles x axis labels for readability
+  guides(color=guide_legend(title = "Year")) # legend since the plot is stacked
+st_crime2yrs
+```

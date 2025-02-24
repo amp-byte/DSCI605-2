@@ -1,0 +1,68 @@
+---
+title: "PopsAdrianna_Multiple-view layout"
+author: "Adrianna Pops"
+date: "2024-10-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# install and load required packages
+if(!require(tidyverse)){install.packages('tidyverse')}; require(tidyverse)
+if(!require(colorspace)){install.packages('tidyverse')}; require(colorspace)
+if(!require(gridExtra)){install.packages('gridExtra')}; require(gridExtra)
+
+# set working directory
+setwd("/Users/ampops/Desktop/DSCI605LABS2")
+
+# load and inspect the dataset
+crime = readxl::read_xlsx("Sampledata2.xlsx")
+
+ghist <- length(unique(crime$Year))
+col1=colorspace::diverge_hcl(ghist)
+col1
+
+# plot a grouped histogram for CrimeRate based on Year using ggplot()
+p1 <- crime %>% filter(Year %in% c(2007:2018)) %>% 
+  ggplot(aes(x = CrimeRate, color = as.factor(Year), fill = as.factor(Year))) + 
+  geom_histogram(position = "dodge", alpha = 0.5, bins = 10) +
+  scale_color_manual(values = col1)+
+  scale_fill_manual(values = col1)+
+  labs(title = "Crime Rate Histogram Plots", x = "Crime rate per 100,000 people", y = "count")+
+  ggtitle("Crime Rate Grouped Histogram by Year")
+p1
+
+# plot a scatter plot for the variable Year and CrimeRate using ggplot()
+p2 <- crime %>% filter(Year %in% c(2007:2018)) %>% 
+  ggplot(aes(CrimeRate, Year)) +
+  geom_point(size = 1.5) +
+  labs(x = "Crime Rate") + labs(y = "Year") +
+  ggtitle("Scatter Plot for Crime Rate by Year")
+p2
+
+# plot a grouped box plot for Crimerate based on Year groupings using ggplot()
+p3 <- crime %>% filter(Year %in% c(2007:2018)) %>% 
+  ggplot(aes(x = Year, y = CrimeRate, fill = as.factor(Year))) +
+  geom_boxplot(outlier.color = "red", outlier.shape = 8, outlier.size = 2) +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  labs(fill = "Year") +
+  ggtitle("Crime Rate Boxplot by Year")
+p3
+
+# arrange all three plots in one page using grid.arrange()
+g1 <- ggplotGrob(p1) #p1, 2, 3 all ggplot2 objects
+g2 <- ggplotGrob(p2)
+g3 <- ggplotGrob(p3)
+
+grid.arrange(g1, g2, g3,  widths = c(1, 1, 1, 1),
+             
+             layout_matrix = rbind(c(1, 1, 2, 2),
+                                   c(3, 3, 3, 3))) # 4 plot objects for 1 boxplot
+dev.off()
+```
+
